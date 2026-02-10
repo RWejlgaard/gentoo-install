@@ -220,6 +220,21 @@ PARTITIONING_ZFS_COMPRESSIONS=("on" "gzip" "lz4" "lzjb" "zle" "zstd" "zstd-fast"
 
 PORTAGE_SYNC_TYPES=("git" "rsync")
 
+ALL_DESKTOP_ENVIRONMENTS=(
+	"none"      "None (no desktop environment)"
+	"plasma"    "KDE Plasma (kde-plasma/plasma-meta)"
+	"gnome"     "GNOME (gnome-base/gnome)"
+	"xfce"      "Xfce4 (xfce-base/xfce4-meta)"
+	"hyprland"  "Hyprland (gui-wm/hyprland, Wayland-only)"
+)
+
+ALL_DISPLAY_MANAGERS=(
+	"none"      "None (no display manager)"
+	"sddm"     "SDDM (x11-misc/sddm)"
+	"lightdm"  "LightDM (x11-misc/lightdm)"
+	"gdm"      "GDM (gnome-base/gdm)"
+)
+
 function create_single_disk_layout() {
 	create_classic_single_disk_layout "$@"
 }
@@ -436,6 +451,8 @@ function load_default_config() {
 	ENABLE_SSHD=true
 	ENABLE_BINPKG=false
 	ROOT_SSH_AUTHORIZED_KEYS=""
+	DESKTOP_ENVIRONMENT="none"
+	DISPLAY_MANAGER="none"
 
 	# All settings are unsaved.
 	UNSAVED_CHANGES=true
@@ -896,6 +913,8 @@ MENU_ITEMS=(
 	"ENABLE_BINPKG"
 	"ROOT_SSH_AUTHORIZED_KEYS"
 	"ADDITIONAL_PACKAGES"
+	"DESKTOP_ENVIRONMENT"
+	"DISPLAY_MANAGER"
 )
 
 function --------_tag()   { echo "────────────────────────────"; }
@@ -1594,6 +1613,52 @@ function ADDITIONAL_PACKAGES_menu()  {
 	UNSAVED_CHANGES=true
 }
 
+function DESKTOP_ENVIRONMENT_tag()   { echo "Desktop environment"; }
+function DESKTOP_ENVIRONMENT_label() { echo "($DESKTOP_ENVIRONMENT)"; }
+function DESKTOP_ENVIRONMENT_show()  { return 0; }
+function DESKTOP_ENVIRONMENT_help()  { echo "Select a desktop environment to install. KDE Plasma, GNOME, Xfce4, and Hyprland (Wayland-only) are supported. Selecting a desktop environment will add the required USE flags (X, wayland) to make.conf. If a display manager is not yet set, a recommended default will be suggested. Note: Desktop environments are large and can take a long time to compile. Consider enabling binary packages."; }
+function DESKTOP_ENVIRONMENT_menu()  {
+	if menu_radiolist_labeled \
+		"Select desktop environment" \
+		"Select which desktop environment to install on the new system. Choose 'None' for a minimal system without a graphical environment." \
+		"$DESKTOP_ENVIRONMENT" \
+		"${ALL_DESKTOP_ENVIRONMENTS[@]}"
+	then
+		DESKTOP_ENVIRONMENT="$dialog_out"
+		# Auto-suggest a recommended display manager
+		case "$DESKTOP_ENVIRONMENT" in
+			"plasma")   [[ "$DISPLAY_MANAGER" == "none" ]] && DISPLAY_MANAGER="sddm" ;;
+			"gnome")    [[ "$DISPLAY_MANAGER" == "none" ]] && DISPLAY_MANAGER="gdm" ;;
+			"xfce")     [[ "$DISPLAY_MANAGER" == "none" ]] && DISPLAY_MANAGER="lightdm" ;;
+			"hyprland") [[ "$DISPLAY_MANAGER" == "none" ]] && DISPLAY_MANAGER="sddm" ;;
+			"none")     DISPLAY_MANAGER="none" ;;
+		esac
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function DISPLAY_MANAGER_tag()   { echo " └ Display manager"; }
+function DISPLAY_MANAGER_label() { echo " └ ($DISPLAY_MANAGER)"; }
+function DISPLAY_MANAGER_show()  { [[ "$DESKTOP_ENVIRONMENT" != "none" ]]; }
+function DISPLAY_MANAGER_help()  { echo "Select a display manager (login greeter) to install. SDDM is recommended for KDE Plasma, GDM for GNOME, and LightDM for Xfce4. The display manager will be enabled as a service automatically. On OpenRC systems, dbus and elogind services will also be configured."; }
+function DISPLAY_MANAGER_menu()  {
+	if menu_radiolist_labeled \
+		"Select display manager" \
+		"Select which display manager (login greeter) to install. If you are unsure, the recommended default for your chosen desktop environment is usually fine." \
+		"$DISPLAY_MANAGER" \
+		"${ALL_DISPLAY_MANAGERS[@]}"
+	then
+		DISPLAY_MANAGER="$dialog_out"
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
 
 ################################################
 # Menu functions
@@ -1660,6 +1725,8 @@ ADDITIONAL_PACKAGES=(${ADDITIONAL_PACKAGES[@]@Q})
 ENABLE_SSHD=${ENABLE_SSHD@Q}
 ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
+DESKTOP_ENVIRONMENT=${DESKTOP_ENVIRONMENT@Q}
+DISPLAY_MANAGER=${DISPLAY_MANAGER@Q}
 
 
 ################################################

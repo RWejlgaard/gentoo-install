@@ -306,6 +306,22 @@ ENABLE_BINPKG=false
 # so you may specify one key per line (include the newlines in the variable).
 ROOT_SSH_AUTHORIZED_KEYS=""
 
+# Desktop environment to install.
+# Options: "none", "plasma" (KDE), "gnome", "xfce", "hyprland" (Wayland-only)
+# Selecting a desktop environment will add appropriate USE flags (X, wayland)
+# to /etc/portage/make.conf during installation.
+# Note: Desktop environments are large and can take a long time to compile.
+# Consider enabling binary packages (ENABLE_BINPKG=true) to speed things up.
+DESKTOP_ENVIRONMENT="none"
+
+# Display manager (login greeter) to install.
+# Options: "none", "sddm", "lightdm", "gdm"
+# Recommended pairings: plasma->sddm, gnome->gdm, xfce->lightdm, hyprland->sddm
+# On OpenRC, this also installs gui-libs/display-manager-init and configures
+# /etc/conf.d/display-manager. The dbus and elogind services are enabled as needed.
+# On systemd, the display manager service is simply enabled.
+DISPLAY_MANAGER="none"
+
 
 ################################################
 # Prove that you have read the config

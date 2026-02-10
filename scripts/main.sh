@@ -132,6 +132,89 @@ function install_authorized_keys() {
 	fi
 }
 
+function configure_desktop_use_flags() {
+	: "${DESKTOP_ENVIRONMENT:=none}"
+	[[ "$DESKTOP_ENVIRONMENT" == "none" ]] && return 0
+
+	# Add USE flags for graphical environment support
+	if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" ]]; then
+		einfo "Adding wayland USE flag to make.conf"
+		echo 'USE="${USE} wayland"' >> /etc/portage/make.conf \
+			|| die "Could not append USE flags to /etc/portage/make.conf"
+	else
+		einfo "Adding X and wayland USE flags to make.conf"
+		echo 'USE="${USE} X wayland"' >> /etc/portage/make.conf \
+			|| die "Could not append USE flags to /etc/portage/make.conf"
+	fi
+
+	# OpenRC systems need elogind for session management
+	if [[ $SYSTEMD != "true" ]]; then
+		einfo "Adding elogind USE flag to make.conf"
+		echo 'USE="${USE} elogind"' >> /etc/portage/make.conf \
+			|| die "Could not append elogind USE flag to /etc/portage/make.conf"
+	fi
+}
+
+function install_desktop_environment() {
+	: "${DESKTOP_ENVIRONMENT:=none}"
+	[[ "$DESKTOP_ENVIRONMENT" == "none" ]] && return 0
+
+	local de_package=""
+	case "$DESKTOP_ENVIRONMENT" in
+		"plasma")   de_package="kde-plasma/plasma-meta" ;;
+		"gnome")    de_package="gnome-base/gnome" ;;
+		"xfce")     de_package="xfce-base/xfce4-meta" ;;
+		"hyprland") de_package="gui-wm/hyprland" ;;
+		*) die "Unknown desktop environment: $DESKTOP_ENVIRONMENT" ;;
+	esac
+
+	einfo "Installing desktop environment: $DESKTOP_ENVIRONMENT ($de_package)"
+	try emerge --verbose --autounmask-continue=y "$de_package"
+}
+
+function install_display_manager() {
+	: "${DISPLAY_MANAGER:=none}"
+	[[ "$DISPLAY_MANAGER" == "none" ]] && return 0
+
+	local dm_package=""
+	case "$DISPLAY_MANAGER" in
+		"sddm")    dm_package="x11-misc/sddm" ;;
+		"lightdm") dm_package="x11-misc/lightdm" ;;
+		"gdm")     dm_package="gnome-base/gdm" ;;
+		*) die "Unknown display manager: $DISPLAY_MANAGER" ;;
+	esac
+
+	einfo "Installing display manager: $DISPLAY_MANAGER ($dm_package)"
+	try emerge --verbose --autounmask-continue=y "$dm_package"
+
+	if [[ $SYSTEMD == "true" ]]; then
+		local dm_service=""
+		case "$DISPLAY_MANAGER" in
+			"sddm")    dm_service="sddm.service" ;;
+			"lightdm") dm_service="lightdm" ;;
+			"gdm")     dm_service="gdm.service" ;;
+		esac
+		einfo "Enabling display manager service: $dm_service"
+		try systemctl enable "$dm_service"
+	else
+		einfo "Installing display-manager-init for OpenRC"
+		try emerge --verbose gui-libs/display-manager-init
+
+		einfo "Configuring display manager in /etc/conf.d/display-manager"
+		sed -i "s/^DISPLAYMANAGER=.*/DISPLAYMANAGER=\"$DISPLAY_MANAGER\"/" /etc/conf.d/display-manager \
+			|| die "Could not configure display manager in /etc/conf.d/display-manager"
+
+		einfo "Enabling display-manager service"
+		try rc-update add display-manager default
+
+		einfo "Enabling dbus service"
+		try rc-update add dbus default
+
+		einfo "Enabling elogind service"
+		try rc-update add elogind boot
+	fi
+}
+
 function generate_initramfs() {
 	local output="$1"
 
@@ -406,6 +489,9 @@ function main_install_gentoo_in_chroot() {
 	maybe_exec 'before_configure_portage'
 	configure_portage
 
+	# Configure USE flags for desktop environment (before any emerge calls)
+	configure_desktop_use_flags
+
 	# Install git (for git portage overlays)
 	einfo "Installing git"
 	try emerge --verbose dev-vcs/git
@@ -530,6 +616,10 @@ EOF
 	if [[ $ENABLE_SSHD == "true" ]]; then
 		enable_sshd
 	fi
+
+	# Install desktop environment and display manager if configured
+	install_desktop_environment
+	install_display_manager
 
 	# Install additional packages, if any.
 	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
