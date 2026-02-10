@@ -453,6 +453,8 @@ function load_default_config() {
 	ROOT_SSH_AUTHORIZED_KEYS=""
 	DESKTOP_ENVIRONMENT="none"
 	DISPLAY_MANAGER="none"
+	SYSTEM_USERS=()
+	SYSTEM_SUDOERS=()
 
 	# All settings are unsaved.
 	UNSAVED_CHANGES=true
@@ -915,6 +917,8 @@ MENU_ITEMS=(
 	"ADDITIONAL_PACKAGES"
 	"DESKTOP_ENVIRONMENT"
 	"DISPLAY_MANAGER"
+	"SYSTEM_USERS"
+	"SYSTEM_SUDOERS"
 )
 
 function --------_tag()   { echo "────────────────────────────"; }
@@ -1659,6 +1663,69 @@ function DISPLAY_MANAGER_menu()  {
 	fi
 }
 
+function SYSTEM_USERS_tag()   { echo "System users"; }
+function SYSTEM_USERS_label() { echo "${#SYSTEM_USERS[@]} users"; }
+function SYSTEM_USERS_show()  { return 0; }
+function SYSTEM_USERS_help()  { echo "Enter usernames to create on the new system. Each user will be created with a home directory and added to the users group. You will be prompted to set passwords during installation."; }
+function SYSTEM_USERS_menu()  {
+	dialog \
+		--title "System users" \
+		--inputbox "Enter usernames to create on the new system, separated by spaces." \
+		"${INPUTBOX_SIZE[@]}" "${SYSTEM_USERS[*]}" \
+		|| return 0
+	local old_users=("${SYSTEM_USERS[@]}")
+	# shellcheck disable=SC2206
+	SYSTEM_USERS=($dialog_out)
+	# Remove sudoers entries for users that were removed
+	local new_sudoers=()
+	local sudoer
+	for sudoer in "${SYSTEM_SUDOERS[@]}"; do
+		local user
+		for user in "${SYSTEM_USERS[@]}"; do
+			if [[ "$sudoer" == "$user" ]]; then
+				new_sudoers+=("$sudoer")
+				break
+			fi
+		done
+	done
+	SYSTEM_SUDOERS=("${new_sudoers[@]}")
+	UNSAVED_CHANGES=true
+}
+
+function SYSTEM_SUDOERS_tag()   { echo " └ Sudoers"; }
+function SYSTEM_SUDOERS_label() { echo " └ ${#SYSTEM_SUDOERS[@]} of ${#SYSTEM_USERS[@]} users"; }
+function SYSTEM_SUDOERS_show()  { [[ ${#SYSTEM_USERS[@]} -gt 0 ]]; }
+function SYSTEM_SUDOERS_help()  { echo "Select which users should have sudo privileges. Selected users will be added to the wheel group. If any users are selected, app-admin/sudo will be installed and the wheel group will be granted sudo access."; }
+function SYSTEM_SUDOERS_menu()  {
+	# Build checklist items from SYSTEM_USERS
+	local items=()
+	local user
+	for user in "${SYSTEM_USERS[@]}"; do
+		local state="off"
+		local sudoer
+		for sudoer in "${SYSTEM_SUDOERS[@]}"; do
+			if [[ "$sudoer" == "$user" ]]; then
+				state="on"
+				break
+			fi
+		done
+		items+=("$user" "" "$state")
+	done
+
+	dialog \
+		--title "Select sudoers" \
+		--no-items \
+		--checklist "Select which users should have sudo privileges (wheel group). Use <Space> to toggle." \
+		"${RADIOLIST_SIZE[@]}" "${items[@]}"
+
+	local diag_exit=$?
+	if [[ $diag_exit == 0 ]]; then
+		# shellcheck disable=SC2206
+		SYSTEM_SUDOERS=($dialog_out)
+		UNSAVED_CHANGES=true
+	fi
+}
+
 
 ################################################
 # Menu functions
@@ -1727,6 +1794,8 @@ ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
 DESKTOP_ENVIRONMENT=${DESKTOP_ENVIRONMENT@Q}
 DISPLAY_MANAGER=${DISPLAY_MANAGER@Q}
+SYSTEM_USERS=(${SYSTEM_USERS[@]@Q})
+SYSTEM_SUDOERS=(${SYSTEM_SUDOERS[@]@Q})
 
 
 ################################################

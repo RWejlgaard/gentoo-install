@@ -322,6 +322,18 @@ DESKTOP_ENVIRONMENT="none"
 # On systemd, the display manager service is simply enabled.
 DISPLAY_MANAGER="none"
 
+# System users to create during installation.
+# Each user will be created with a home directory and added to the users group.
+# You will be prompted to set passwords during installation.
+# e.g. SYSTEM_USERS=("alice" "bob")
+SYSTEM_USERS=()
+
+# Users from SYSTEM_USERS that should have sudo privileges (wheel group).
+# If any users are listed here, app-admin/sudo will be installed and the
+# wheel group will be granted sudo access via /etc/sudoers.
+# e.g. SYSTEM_SUDOERS=("alice")
+SYSTEM_SUDOERS=()
+
 
 ################################################
 # Prove that you have read the config

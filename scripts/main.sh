@@ -215,6 +215,47 @@ function install_display_manager() {
 	fi
 }
 
+function create_users() {
+	: "${SYSTEM_USERS:=}"
+	: "${SYSTEM_SUDOERS:=}"
+	[[ ${#SYSTEM_USERS[@]} -gt 0 ]] || return 0
+
+	# Install sudo if any sudoers are configured
+	if [[ ${#SYSTEM_SUDOERS[@]} -gt 0 ]]; then
+		einfo "Installing sudo"
+		try emerge --verbose app-admin/sudo
+
+		einfo "Enabling wheel group in sudoers"
+		sed -i 's/^# %wheel ALL=(ALL:ALL) ALL$/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers \
+			|| die "Could not configure sudoers"
+	fi
+
+	local user
+	for user in "${SYSTEM_USERS[@]}"; do
+		local groups="users"
+		local sudoer
+		for sudoer in "${SYSTEM_SUDOERS[@]}"; do
+			if [[ "$sudoer" == "$user" ]]; then
+				groups="users,wheel"
+				break
+			fi
+		done
+
+		einfo "Creating user: $user (groups: $groups)"
+		useradd -m -G "$groups" -s /bin/bash "$user" \
+			|| die "Could not create user $user"
+
+		if ask "Do you want to set a password for user '$user' now?"; then
+			try passwd "$user"
+			einfo "Password set for $user"
+		else
+			passwd -d "$user" \
+				|| die "Could not clear password for $user"
+			ewarn "No password set for $user, set one after first login!"
+		fi
+	done
+}
+
 function generate_initramfs() {
 	local output="$1"
 
@@ -620,6 +661,9 @@ EOF
 	# Install desktop environment and display manager if configured
 	install_desktop_environment
 	install_display_manager
+
+	# Create system users and configure sudo if needed
+	create_users
 
 	# Install additional packages, if any.
 	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
