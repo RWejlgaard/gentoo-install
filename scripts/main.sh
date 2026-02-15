@@ -222,6 +222,7 @@ function install_users() {
 	if [[ "$need_sudo" == "true" ]]; then
 		einfo "Installing sudo"
 		try emerge --verbose app-admin/sudo
+		mkdir_or_die 0755 "/etc/sudoers.d"
 	fi
 
 	# Ensure wheel group has sudo access for standard sudo users
