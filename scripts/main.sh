@@ -128,9 +128,9 @@ function install_graphical() {
 	case "$GRAPHICAL_ENVIRONMENT" in
 		"gnome")
 			de_packages+=("gnome-base/gnome")
-			einfo "Enabling gtk USE flag for GNOME"
-			echo "gnome-base/gnome gtk" > /etc/portage/package.use/gnome \
-				|| die "Could not write /etc/portage/package.use/gnome"
+			einfo "Enabling global gtk USE flag for GNOME"
+			echo 'USE="${USE} gtk"' >> /etc/portage/make.conf \
+				|| die "Could not append gtk USE flag to /etc/portage/make.conf"
 			;;
 		"kde-plasma") de_packages+=("kde-plasma/plasma-meta") ;;
 		"xfce")       de_packages+=("xfce-base/xfce4-meta") ;;
