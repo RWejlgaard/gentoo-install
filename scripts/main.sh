@@ -126,7 +126,12 @@ function install_graphical() {
 	# Install the selected graphical environment
 	local de_packages=()
 	case "$GRAPHICAL_ENVIRONMENT" in
-		"gnome")      de_packages+=("gnome-base/gnome") ;;
+		"gnome")
+			de_packages+=("gnome-base/gnome")
+			einfo "Enabling gtk USE flag for GNOME"
+			echo "gnome-base/gnome gtk" > /etc/portage/package.use/gnome \
+				|| die "Could not write /etc/portage/package.use/gnome"
+			;;
 		"kde-plasma") de_packages+=("kde-plasma/plasma-meta") ;;
 		"xfce")       de_packages+=("xfce-base/xfce4-meta") ;;
 		"sway")       de_packages+=("gui-wm/sway") ;;
