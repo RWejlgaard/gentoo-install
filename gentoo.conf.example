@@ -288,6 +288,31 @@ SELECT_MIRRORS_LARGE_FILE=false
 
 
 ################################################
+# Graphical environment (optional)
+
+# Set to true to install a graphical desktop environment or window manager.
+# Requires a desktop stage3 variant (e.g. desktop-systemd or desktop-openrc).
+INSTALL_GRAPHICAL=false
+
+# The graphical environment to install.
+# Options: gnome, kde-plasma, xfce, sway, i3
+GRAPHICAL_ENVIRONMENT="gnome"
+
+# The display manager (greeter) for graphical login.
+# Options: gdm, sddm, lightdm
+GRAPHICAL_GREETER="gdm"
+
+# The sound system to install.
+# Options: pipewire, pulseaudio, none
+GRAPHICAL_SOUND_SYSTEM="pipewire"
+
+# The GPU driver to install.
+# Options: auto, nvidia, amdgpu, intel, nouveau
+# "auto" will not install any explicit GPU driver package.
+GRAPHICAL_GPU_DRIVER="auto"
+
+
+################################################
 # Additional (optional) configuration
 
 # Array of additional packages to install

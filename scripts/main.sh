@@ -120,6 +120,76 @@ function enable_sshd() {
 	enable_service sshd
 }
 
+function install_graphical() {
+	einfo "Installing graphical environment"
+
+	# Install the selected graphical environment
+	local de_packages=()
+	case "$GRAPHICAL_ENVIRONMENT" in
+		"gnome")      de_packages+=("gnome-base/gnome") ;;
+		"kde-plasma") de_packages+=("kde-plasma/plasma-meta") ;;
+		"xfce")       de_packages+=("xfce-base/xfce4-meta") ;;
+		"sway")       de_packages+=("gui-wm/sway") ;;
+		"i3")         de_packages+=("x11-wm/i3") ;;
+		*) die "Unknown graphical environment: $GRAPHICAL_ENVIRONMENT" ;;
+	esac
+
+	# Install the selected display manager (greeter)
+	local greeter_service=""
+	case "$GRAPHICAL_GREETER" in
+		"gdm")
+			de_packages+=("gnome-base/gdm")
+			greeter_service="gdm"
+			;;
+		"sddm")
+			de_packages+=("x11-misc/sddm")
+			greeter_service="sddm"
+			;;
+		"lightdm")
+			de_packages+=("x11-misc/lightdm")
+			greeter_service="lightdm"
+			;;
+		*) die "Unknown greeter: $GRAPHICAL_GREETER" ;;
+	esac
+
+	# Install the selected sound system
+	case "$GRAPHICAL_SOUND_SYSTEM" in
+		"pipewire")
+			de_packages+=("media-video/pipewire" "media-video/wireplumber")
+			;;
+		"pulseaudio")
+			de_packages+=("media-sound/pulseaudio")
+			;;
+		"none") ;;
+		*) die "Unknown sound system: $GRAPHICAL_SOUND_SYSTEM" ;;
+	esac
+
+	# Install GPU driver
+	case "${GRAPHICAL_GPU_DRIVER:-auto}" in
+		"auto") ;;
+		"nvidia")
+			de_packages+=("x11-drivers/nvidia-drivers")
+			;;
+		"amdgpu")
+			de_packages+=("x11-drivers/xf86-video-amdgpu")
+			;;
+		"intel")
+			de_packages+=("x11-drivers/xf86-video-intel")
+			;;
+		"nouveau")
+			de_packages+=("x11-drivers/xf86-video-nouveau")
+			;;
+		*) die "Unknown GPU driver: $GRAPHICAL_GPU_DRIVER" ;;
+	esac
+
+	einfo "Emerging graphical packages: ${de_packages[*]}"
+	try emerge --verbose --autounmask-continue=y -- "${de_packages[@]}"
+
+	# Enable the greeter service
+	einfo "Enabling $greeter_service service"
+	enable_service "$greeter_service"
+}
+
 function install_authorized_keys() {
 	mkdir_or_die 0700 "/root/"
 	mkdir_or_die 0700 "/root/.ssh"
@@ -535,6 +605,11 @@ EOF
 
 	if [[ $ENABLE_SSHD == "true" ]]; then
 		enable_sshd
+	fi
+
+	# Install graphical environment, if enabled.
+	if [[ ${INSTALL_GRAPHICAL:-false} == "true" ]]; then
+		install_graphical
 	fi
 
 	# Install additional packages, if any.

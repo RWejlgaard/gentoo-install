@@ -224,6 +224,31 @@ KERNEL_TYPES=(
 	"source" "source | Build kernel from source (gentoo-kernel)"
 )
 
+ALL_GRAPHICAL_ENVIRONMENTS=(
+	"gnome"       "gnome       | GNOME desktop environment"
+	"kde-plasma"  "kde-plasma  | KDE Plasma desktop environment"
+	"xfce"        "xfce        | XFCE lightweight desktop environment"
+	"sway"        "sway        | Sway tiling Wayland compositor"
+	"i3"          "i3          | i3 tiling window manager"
+)
+ALL_GRAPHICAL_GREETERS=(
+	"gdm"      "gdm      | GNOME Display Manager"
+	"sddm"     "sddm     | Simple Desktop Display Manager"
+	"lightdm"  "lightdm  | LightDM display manager"
+)
+ALL_GRAPHICAL_SOUND_SYSTEMS=(
+	"pipewire"   "pipewire   | PipeWire (modern, recommended)"
+	"pulseaudio" "pulseaudio | PulseAudio"
+	"none"       "none       | No sound system"
+)
+ALL_GRAPHICAL_GPU_DRIVERS=(
+	"auto"    "auto    | Autodetect (no explicit driver)"
+	"nvidia"  "nvidia  | NVIDIA proprietary drivers"
+	"amdgpu"  "amdgpu  | AMD GPU (open source)"
+	"intel"   "intel   | Intel integrated graphics"
+	"nouveau" "nouveau | NVIDIA open source driver"
+)
+
 function create_single_disk_layout() {
 	create_classic_single_disk_layout "$@"
 }
@@ -435,6 +460,12 @@ function load_default_config() {
 	USE_PORTAGE_TESTING=true
 	SELECT_MIRRORS=false
 	SELECT_MIRRORS_LARGE_FILE=false
+
+	INSTALL_GRAPHICAL=false
+	GRAPHICAL_ENVIRONMENT="gnome"
+	GRAPHICAL_GREETER="gdm"
+	GRAPHICAL_SOUND_SYSTEM="pipewire"
+	GRAPHICAL_GPU_DRIVER="auto"
 
 	ADDITIONAL_PACKAGES=()
 	ENABLE_SSHD=true
@@ -887,6 +918,11 @@ MENU_ITEMS=(
 	"SYSTEMD_NETWORKD_GATEWAY"
 	"--------"
 	"STAGE3_VARIANT"
+	"INSTALL_GRAPHICAL"
+	"GRAPHICAL_ENVIRONMENT"
+	"GRAPHICAL_GREETER"
+	"GRAPHICAL_SOUND_SYSTEM"
+	"GRAPHICAL_GPU_DRIVER"
 	"PORTAGE_SYNC_TYPE"
 	"PORTAGE_GIT_FULL_HISTORY"
 	"PORTAGE_GIT_MIRROR"
@@ -1393,6 +1429,115 @@ function SYSTEMD_NETWORKD_GATEWAY_menu()  {
 	UNSAVED_CHANGES=true
 }
 
+function INSTALL_GRAPHICAL_tag()   { echo " ├ Graphical environment"; }
+function INSTALL_GRAPHICAL_label() {
+	if is_on "$INSTALL_GRAPHICAL" && [[ $STAGE3_VARIANT != *desktop* ]]; then
+		on_off_label "$INSTALL_GRAPHICAL" " ├ "
+		echo -n " \Z1(stage3 is not a desktop variant!)\Zn"
+	else
+		on_off_label "$INSTALL_GRAPHICAL" " ├ "
+	fi
+}
+function INSTALL_GRAPHICAL_show()  { return 0; }
+function INSTALL_GRAPHICAL_help()  { echo "Enable installation of a graphical desktop environment or window manager with a display manager (greeter). Requires a desktop stage3 variant (e.g. desktop-systemd or desktop-openrc) to have all necessary dependencies."; }
+function INSTALL_GRAPHICAL_menu()  {
+	if is_off "$INSTALL_GRAPHICAL" && [[ $STAGE3_VARIANT != *desktop* ]]; then
+		dialog \
+			--title "Stage3 variant notice" \
+			--yes-label "Switch" --no-label "Keep" \
+			--yesno "A graphical environment requires a desktop stage3 variant to ensure all dependencies are available.\n\nYour current stage3 variant is '$STAGE3_VARIANT'.\n\nSwitch to a desktop variant?" \
+			"${CONFIRM_SIZE[@]}"
+
+		local diag_exit="$?"
+		if [[ $diag_exit == 0 ]]; then
+			# Switch to the desktop variant of the same init system
+			if [[ $STAGE3_VARIANT == *systemd* ]]; then
+				STAGE3_VARIANT="desktop-systemd"
+			else
+				STAGE3_VARIANT="desktop-openrc"
+			fi
+		fi
+	fi
+	on_off_toggle "INSTALL_GRAPHICAL"
+	UNSAVED_CHANGES=true
+}
+
+function GRAPHICAL_ENVIRONMENT_tag()   { echo " │  ├ Environment"; }
+function GRAPHICAL_ENVIRONMENT_label() { echo " │  ├ ($GRAPHICAL_ENVIRONMENT)"; }
+function GRAPHICAL_ENVIRONMENT_show()  { is_on "$INSTALL_GRAPHICAL"; }
+function GRAPHICAL_ENVIRONMENT_help()  { echo "Select the graphical environment (desktop environment or window manager) to install."; }
+function GRAPHICAL_ENVIRONMENT_menu()  {
+	if menu_radiolist_labeled \
+		"Select graphical environment" \
+		"Select which graphical environment to install." \
+		"$GRAPHICAL_ENVIRONMENT" \
+		"${ALL_GRAPHICAL_ENVIRONMENTS[@]}"
+	then
+		GRAPHICAL_ENVIRONMENT="$dialog_out"
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function GRAPHICAL_GREETER_tag()   { echo " │  ├ Greeter"; }
+function GRAPHICAL_GREETER_label() { echo " │  ├ ($GRAPHICAL_GREETER)"; }
+function GRAPHICAL_GREETER_show()  { is_on "$INSTALL_GRAPHICAL"; }
+function GRAPHICAL_GREETER_help()  { echo "Select the display manager (greeter) to use for graphical login."; }
+function GRAPHICAL_GREETER_menu()  {
+	if menu_radiolist_labeled \
+		"Select greeter" \
+		"Select which display manager (greeter) to use." \
+		"$GRAPHICAL_GREETER" \
+		"${ALL_GRAPHICAL_GREETERS[@]}"
+	then
+		GRAPHICAL_GREETER="$dialog_out"
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function GRAPHICAL_SOUND_SYSTEM_tag()   { echo " │  ├ Sound system"; }
+function GRAPHICAL_SOUND_SYSTEM_label() { echo " │  ├ ($GRAPHICAL_SOUND_SYSTEM)"; }
+function GRAPHICAL_SOUND_SYSTEM_show()  { is_on "$INSTALL_GRAPHICAL"; }
+function GRAPHICAL_SOUND_SYSTEM_help()  { echo "Select the sound system to install. PipeWire is the modern replacement for PulseAudio and is recommended for most setups."; }
+function GRAPHICAL_SOUND_SYSTEM_menu()  {
+	if menu_radiolist_labeled \
+		"Select sound system" \
+		"Select which sound system to install." \
+		"$GRAPHICAL_SOUND_SYSTEM" \
+		"${ALL_GRAPHICAL_SOUND_SYSTEMS[@]}"
+	then
+		GRAPHICAL_SOUND_SYSTEM="$dialog_out"
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function GRAPHICAL_GPU_DRIVER_tag()   { echo " │  └ GPU driver"; }
+function GRAPHICAL_GPU_DRIVER_label() { echo " │  └ ($GRAPHICAL_GPU_DRIVER)"; }
+function GRAPHICAL_GPU_DRIVER_show()  { is_on "$INSTALL_GRAPHICAL"; }
+function GRAPHICAL_GPU_DRIVER_help()  { echo "Select the GPU driver to install. 'auto' will not install any explicit GPU driver package, relying on autodetection. Select a specific driver if you know your hardware."; }
+function GRAPHICAL_GPU_DRIVER_menu()  {
+	if menu_radiolist_labeled \
+		"Select GPU driver" \
+		"Select which GPU driver to install." \
+		"$GRAPHICAL_GPU_DRIVER" \
+		"${ALL_GRAPHICAL_GPU_DRIVERS[@]}"
+	then
+		GRAPHICAL_GPU_DRIVER="$dialog_out"
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
 function STAGE3_VARIANT_tag()   { echo "Stage3 variant & Init system"; }
 function STAGE3_VARIANT_label() { echo "($STAGE3_VARIANT)"; }
 function STAGE3_VARIANT_show()  { return 0; }
@@ -1680,6 +1825,12 @@ MUSL=\$([[ \$STAGE3_VARIANT == *musl* ]] && echo "true" || echo "false")
 
 ################################################
 # Additional (optional) configuration
+
+INSTALL_GRAPHICAL=${INSTALL_GRAPHICAL@Q}
+GRAPHICAL_ENVIRONMENT=${GRAPHICAL_ENVIRONMENT@Q}
+GRAPHICAL_GREETER=${GRAPHICAL_GREETER@Q}
+GRAPHICAL_SOUND_SYSTEM=${GRAPHICAL_SOUND_SYSTEM@Q}
+GRAPHICAL_GPU_DRIVER=${GRAPHICAL_GPU_DRIVER@Q}
 
 ADDITIONAL_PACKAGES=(${ADDITIONAL_PACKAGES[@]@Q})
 ENABLE_SSHD=${ENABLE_SSHD@Q}
