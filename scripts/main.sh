@@ -186,8 +186,85 @@ function install_graphical() {
 	try emerge --verbose --autounmask-continue=y -- "${de_packages[@]}"
 
 	# Enable the greeter service
-	einfo "Enabling $greeter_service service"
-	enable_service "$greeter_service"
+	if [[ $SYSTEMD == "true" ]]; then
+		einfo "Enabling $greeter_service service"
+		enable_service "$greeter_service"
+	else
+		einfo "Installing display-manager-init for OpenRC"
+		try emerge --verbose gui-libs/display-manager-init
+
+		einfo "Configuring display manager to use $greeter_service"
+		sed -i "s/DISPLAYMANAGER=\".*\"/DISPLAYMANAGER=\"$greeter_service\"/" /etc/conf.d/display-manager \
+			|| die "Could not set DISPLAYMANAGER in /etc/conf.d/display-manager"
+
+		einfo "Enabling display-manager service"
+		try rc-update add display-manager default
+		einfo "Enabling elogind service"
+		try rc-update add elogind boot
+	fi
+}
+
+function install_users() {
+	einfo "Creating user accounts"
+
+	local need_sudo=false
+	local need_wheel_sudoers=false
+	local i
+	for ((i = 0; i < ${#USERS[@]}; i++)); do
+		if [[ "${USERS_SUDO[$i]}" != "none" ]]; then
+			need_sudo=true
+			if [[ "${USERS_SUDO[$i]}" == "sudo" ]]; then
+				need_wheel_sudoers=true
+			fi
+		fi
+	done
+
+	if [[ "$need_sudo" == "true" ]]; then
+		einfo "Installing sudo"
+		try emerge --verbose app-admin/sudo
+	fi
+
+	# Ensure wheel group has sudo access for standard sudo users
+	if [[ "$need_wheel_sudoers" == "true" ]]; then
+		einfo "Enabling sudo for wheel group"
+		sed -i 's/^#\s*\(%wheel ALL=(ALL:ALL) ALL\)/\1/' /etc/sudoers \
+			|| die "Could not enable wheel group in /etc/sudoers"
+	fi
+
+	for ((i = 0; i < ${#USERS[@]}; i++)); do
+		local username="${USERS[$i]}"
+		local password="${USERS_PASSWORDS[$i]}"
+		local sudo_type="${USERS_SUDO[$i]}"
+		local set_pw="${USERS_SET_PASSWORDS[$i]}"
+
+		# Determine groups
+		local groups="users"
+		if [[ "$sudo_type" != "none" ]]; then
+			groups="users,wheel"
+		fi
+
+		einfo "Creating user '$username' (sudo: $sudo_type)"
+		try useradd -m -G "$groups" -s /bin/bash "$username"
+
+		# Set password
+		if [[ "$set_pw" == "true" && -n "$password" ]]; then
+			einfo "Setting password for '$username'"
+			echo "$username:$password" | chpasswd \
+				|| die "Could not set password for user '$username'"
+		else
+			einfo "Please set a password for '$username'"
+			try passwd "$username"
+		fi
+
+		# Configure NOPASSWD sudo
+		if [[ "$sudo_type" == "nopasswd" ]]; then
+			einfo "Configuring NOPASSWD sudo for '$username'"
+			echo "$username ALL=(ALL:ALL) NOPASSWD: ALL" > "/etc/sudoers.d/$username" \
+				|| die "Could not create /etc/sudoers.d/$username"
+			chmod 0440 "/etc/sudoers.d/$username" \
+				|| die "Could not set permissions on /etc/sudoers.d/$username"
+		fi
+	done
 }
 
 function install_authorized_keys() {
@@ -617,6 +694,11 @@ EOF
 		einfo "Installing additional packages"
 		# shellcheck disable=SC2086
 		try emerge --verbose --autounmask-continue=y -- "${ADDITIONAL_PACKAGES[@]}"
+	fi
+
+	# Create user accounts, if any.
+	if [[ ${#USERS[@]} -gt 0 ]]; then
+		install_users
 	fi
 
 	if ask "Do you want to assign a root password now?"; then

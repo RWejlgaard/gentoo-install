@@ -338,6 +338,28 @@ ROOT_SSH_AUTHORIZED_KEYS=""
 
 
 ################################################
+# User accounts (optional)
+
+# User accounts to create during installation. Each index across
+# the four arrays corresponds to one user.
+#
+# USERS:              Array of usernames
+# USERS_PASSWORDS:    Array of passwords (only used when corresponding USERS_SET_PASSWORDS is "true")
+# USERS_SUDO:         Array of sudo types: "none", "sudo" (standard), or "nopasswd" (passwordless)
+# USERS_SET_PASSWORDS: Array of "true"/"false" - if "false", password will be prompted during install
+#
+# Example: Two users - "alice" with sudo and password set, "bob" with NOPASSWD sudo prompted at install
+# USERS=("alice" "bob")
+# USERS_PASSWORDS=("alices_password" "")
+# USERS_SUDO=("sudo" "nopasswd")
+# USERS_SET_PASSWORDS=("true" "false")
+USERS=()
+USERS_PASSWORDS=()
+USERS_SUDO=()
+USERS_SET_PASSWORDS=()
+
+
+################################################
 # Prove that you have read the config
 
 # To prove that you have read and edited the config

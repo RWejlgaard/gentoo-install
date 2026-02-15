@@ -467,6 +467,11 @@ function load_default_config() {
 	GRAPHICAL_SOUND_SYSTEM="pipewire"
 	GRAPHICAL_GPU_DRIVER="auto"
 
+	USERS=()
+	USERS_PASSWORDS=()
+	USERS_SUDO=()
+	USERS_SET_PASSWORDS=()
+
 	ADDITIONAL_PACKAGES=()
 	ENABLE_SSHD=true
 	ENABLE_BINPKG=false
@@ -938,6 +943,8 @@ MENU_ITEMS=(
 	"KERNEL_TYPE"
 	"ROOT_SSH_AUTHORIZED_KEYS"
 	"ADDITIONAL_PACKAGES"
+	"--------"
+	"USERS_MENU"
 )
 
 function --------_tag()   { echo "────────────────────────────"; }
@@ -1766,6 +1773,231 @@ function ADDITIONAL_PACKAGES_menu()  {
 
 
 ################################################
+# User management functions
+
+ALL_USER_SUDO_TYPES=(
+	"none"     "none     | No sudo access"
+	"sudo"     "sudo     | Standard sudo (requires password)"
+	"nopasswd" "nopasswd | Passwordless sudo (NOPASSWD)"
+)
+
+function user_summary() {
+	local idx="$1"
+	local username="${USERS[$idx]}"
+	local sudo_type="${USERS_SUDO[$idx]}"
+	local set_pw="${USERS_SET_PASSWORDS[$idx]}"
+
+	local pw_status
+	if [[ "$set_pw" == "true" ]]; then
+		pw_status="pw:set"
+	else
+		pw_status="pw:prompt"
+	fi
+
+	echo "$username ($sudo_type, $pw_status)"
+}
+
+function menu_user_add() {
+	# Ask for username
+	dialog \
+		--title "Add user" \
+		--inputbox "Enter the username for the new user account." \
+		"${INPUTBOX_SIZE[@]}" "" \
+		|| return 1
+	local username="$dialog_out"
+
+	# Validate username
+	if [[ -z "$username" ]]; then
+		dialog --msgbox "Username cannot be empty." "${CONFIRM_SIZE[@]}"
+		return 1
+	fi
+	if [[ "$username" =~ [^a-z0-9_-] ]]; then
+		dialog --msgbox "Username may only contain lowercase letters, digits, hyphens, and underscores." "${CONFIRM_SIZE[@]}"
+		return 1
+	fi
+
+	# Check for duplicate
+	local u
+	for u in "${USERS[@]}"; do
+		if [[ "$u" == "$username" ]]; then
+			dialog --msgbox "User '$username' already exists." "${CONFIRM_SIZE[@]}"
+			return 1
+		fi
+	done
+
+	# Ask for sudo type
+	if ! menu_radiolist_labeled \
+		"Select sudo type for $username" \
+		"Select the sudo access level for this user." \
+		"none" \
+		"${ALL_USER_SUDO_TYPES[@]}"
+	then
+		return 1
+	fi
+	local sudo_type="$dialog_out"
+
+	# Ask for password mode
+	local set_pw="false"
+	local password=""
+	dialog \
+		--title "Password for $username" \
+		--yes-label "Set now" --no-label "Prompt at install" \
+		--yesno "Do you want to set the password now (stored in config file), or have it prompted during installation?" \
+		"${CONFIRM_SIZE[@]}"
+
+	local diag_exit="$?"
+	if [[ $diag_exit == 0 ]]; then
+		# Set now
+		dialog \
+			--title "Password for $username" \
+			--insecure \
+			--passwordbox "Enter the password for user '$username'." \
+			"${INPUTBOX_SIZE[@]}" "" \
+			|| return 1
+		password="$dialog_out"
+		if [[ -z "$password" ]]; then
+			dialog --msgbox "Password cannot be empty when setting now." "${CONFIRM_SIZE[@]}"
+			return 1
+		fi
+		set_pw="true"
+	fi
+
+	# Add the user
+	USERS+=("$username")
+	USERS_PASSWORDS+=("$password")
+	USERS_SUDO+=("$sudo_type")
+	USERS_SET_PASSWORDS+=("$set_pw")
+	UNSAVED_CHANGES=true
+}
+
+function menu_user_edit() {
+	local idx="$1"
+	local username="${USERS[$idx]}"
+
+	while true; do
+		local sudo_type="${USERS_SUDO[$idx]}"
+		local set_pw="${USERS_SET_PASSWORDS[$idx]}"
+		local pw_label
+		if [[ "$set_pw" == "true" ]]; then
+			pw_label="(set in config)"
+		else
+			pw_label="(prompt during install)"
+		fi
+
+		dialog \
+			--title "Edit user: $username" \
+			--menu "Editing user '$username'. Select an action." \
+			"${MENU_SIZE[@]}" \
+			"password"  "Password $pw_label" \
+			"sudo"      "Sudo type ($sudo_type)" \
+			"remove"    "Remove this user" \
+			"back"      "Back to user list"
+
+		local diag_exit="$?"
+		if [[ $diag_exit != 0 ]]; then
+			return 0
+		fi
+
+		case "$dialog_out" in
+			"password")
+				dialog \
+					--title "Password for $username" \
+					--yes-label "Set now" --no-label "Prompt at install" \
+					--yesno "Do you want to set the password now (stored in config file), or have it prompted during installation?" \
+					"${CONFIRM_SIZE[@]}"
+
+				local pw_exit="$?"
+				if [[ $pw_exit == 0 ]]; then
+					dialog \
+						--title "Password for $username" \
+						--insecure \
+						--passwordbox "Enter the new password for user '$username'." \
+						"${INPUTBOX_SIZE[@]}" "" \
+						|| continue
+					if [[ -n "$dialog_out" ]]; then
+						USERS_PASSWORDS[$idx]="$dialog_out"
+						USERS_SET_PASSWORDS[$idx]="true"
+						UNSAVED_CHANGES=true
+					fi
+				elif [[ $pw_exit == 1 ]]; then
+					USERS_PASSWORDS[$idx]=""
+					USERS_SET_PASSWORDS[$idx]="false"
+					UNSAVED_CHANGES=true
+				fi
+				;;
+			"sudo")
+				if menu_radiolist_labeled \
+					"Select sudo type for $username" \
+					"Select the sudo access level for this user." \
+					"$sudo_type" \
+					"${ALL_USER_SUDO_TYPES[@]}"
+				then
+					USERS_SUDO[$idx]="$dialog_out"
+					UNSAVED_CHANGES=true
+				fi
+				;;
+			"remove")
+				dialog \
+					--title "Remove user" \
+					--yesno "Are you sure you want to remove user '$username'?" \
+					"${CONFIRM_SIZE[@]}"
+				if [[ $? == 0 ]]; then
+					# Remove user from all parallel arrays
+					unset 'USERS[idx]'
+					unset 'USERS_PASSWORDS[idx]'
+					unset 'USERS_SUDO[idx]'
+					unset 'USERS_SET_PASSWORDS[idx]'
+					# Re-index arrays to remove gaps
+					USERS=("${USERS[@]}")
+					USERS_PASSWORDS=("${USERS_PASSWORDS[@]}")
+					USERS_SUDO=("${USERS_SUDO[@]}")
+					USERS_SET_PASSWORDS=("${USERS_SET_PASSWORDS[@]}")
+					UNSAVED_CHANGES=true
+					return 0
+				fi
+				;;
+			"back")
+				return 0
+				;;
+		esac
+	done
+}
+
+function USERS_MENU_tag()   { echo "Users"; }
+function USERS_MENU_label() { echo "${#USERS[@]} users configured"; }
+function USERS_MENU_show()  { return 0; }
+function USERS_MENU_help()  { echo "Configure user accounts to be created during installation. Each user can have a password (set now or prompted during install) and sudo access (none, standard sudo, or passwordless NOPASSWD sudo)."; }
+function USERS_MENU_menu()  {
+	while true; do
+		# Build user list for dialog
+		local items=()
+		local i
+		for ((i = 0; i < ${#USERS[@]}; i++)); do
+			items+=("$i" "$(user_summary "$i")")
+		done
+		items+=("add" ">> Add new user <<")
+
+		dialog \
+			--title "User management" \
+			--ok-label "Select" --cancel-label "Back" \
+			--menu "Manage user accounts. Select a user to edit or add a new user." \
+			"${MENU_SIZE[@]}" "${items[@]}"
+
+		local diag_exit="$?"
+		if [[ $diag_exit != 0 ]]; then
+			return 0
+		fi
+
+		if [[ "$dialog_out" == "add" ]]; then
+			menu_user_add
+		else
+			menu_user_edit "$dialog_out"
+		fi
+	done
+}
+
+
+################################################
 # Menu functions
 
 # $1: filename
@@ -1837,6 +2069,15 @@ ENABLE_SSHD=${ENABLE_SSHD@Q}
 ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 KERNEL_TYPE=${KERNEL_TYPE@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
+
+
+################################################
+# User accounts
+
+USERS=(${USERS[@]@Q})
+USERS_PASSWORDS=(${USERS_PASSWORDS[@]@Q})
+USERS_SUDO=(${USERS_SUDO[@]@Q})
+USERS_SET_PASSWORDS=(${USERS_SET_PASSWORDS[@]@Q})
 
 
 ################################################
