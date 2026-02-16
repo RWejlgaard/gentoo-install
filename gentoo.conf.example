@@ -340,6 +340,12 @@ ROOT_SSH_AUTHORIZED_KEYS=""
 ################################################
 # User accounts (optional)
 
+# Root password configuration.
+# If ROOT_SET_PASSWORD is true, the password in ROOT_PASSWORD will be used.
+# If false, the installer will prompt interactively during installation.
+ROOT_PASSWORD=""
+ROOT_SET_PASSWORD=false
+
 # User accounts to create during installation. Each index across
 # the four arrays corresponds to one user.
 #

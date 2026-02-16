@@ -467,6 +467,9 @@ function load_default_config() {
 	GRAPHICAL_SOUND_SYSTEM="pipewire"
 	GRAPHICAL_GPU_DRIVER="auto"
 
+	ROOT_PASSWORD=""
+	ROOT_SET_PASSWORD=false
+
 	USERS=()
 	USERS_PASSWORDS=()
 	USERS_SUDO=()
@@ -944,6 +947,7 @@ MENU_ITEMS=(
 	"ROOT_SSH_AUTHORIZED_KEYS"
 	"ADDITIONAL_PACKAGES"
 	"--------"
+	"ROOT_PASSWORD_MENU"
 	"USERS_MENU"
 )
 
@@ -1773,6 +1777,46 @@ function ADDITIONAL_PACKAGES_menu()  {
 
 
 ################################################
+# Root password functions
+
+function ROOT_PASSWORD_MENU_tag()   { echo "Root password"; }
+function ROOT_PASSWORD_MENU_label() {
+	if [[ "$ROOT_SET_PASSWORD" == "true" ]]; then
+		echo "(set in config)"
+	else
+		echo "(prompt during install)"
+	fi
+}
+function ROOT_PASSWORD_MENU_show()  { return 0; }
+function ROOT_PASSWORD_MENU_help()  { echo "Configure the root password. You can either set it now (stored in config file) or have it prompted interactively during installation."; }
+function ROOT_PASSWORD_MENU_menu()  {
+	dialog \
+		--title "Root password" \
+		--yes-label "Set now" --no-label "Prompt at install" \
+		--yesno "Do you want to set the root password now (stored in config file), or have it prompted during installation?" \
+		"${CONFIRM_SIZE[@]}"
+
+	local diag_exit="$?"
+	if [[ $diag_exit == 0 ]]; then
+		dialog \
+			--title "Root password" \
+			--insecure \
+			--passwordbox "Enter the root password." \
+			"${INPUTBOX_SIZE[@]}" ""
+		if [[ $? == 0 && -n "$dialog_out" ]]; then
+			ROOT_PASSWORD="$dialog_out"
+			ROOT_SET_PASSWORD=true
+			UNSAVED_CHANGES=true
+		fi
+	elif [[ $diag_exit == 1 ]]; then
+		ROOT_PASSWORD=""
+		ROOT_SET_PASSWORD=false
+		UNSAVED_CHANGES=true
+	fi
+}
+
+
+################################################
 # User management functions
 
 ALL_USER_SUDO_TYPES=(
@@ -2073,6 +2117,9 @@ ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
 
 ################################################
 # User accounts
+
+ROOT_PASSWORD=${ROOT_PASSWORD@Q}
+ROOT_SET_PASSWORD=${ROOT_SET_PASSWORD@Q}
 
 USERS=(${USERS[@]@Q})
 USERS_PASSWORDS=(${USERS_PASSWORDS[@]@Q})

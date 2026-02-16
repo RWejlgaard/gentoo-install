@@ -710,7 +710,11 @@ EOF
 		install_users
 	fi
 
-	if ask "Do you want to assign a root password now?"; then
+	if [[ "${ROOT_SET_PASSWORD:-false}" == "true" && -n "$ROOT_PASSWORD" ]]; then
+		einfo "Setting root password from config"
+		echo "root:$ROOT_PASSWORD" | chpasswd \
+			|| die "Could not set root password"
+	elif ask "Do you want to assign a root password now?"; then
 		try passwd root
 		einfo "Root password assigned"
 	else
