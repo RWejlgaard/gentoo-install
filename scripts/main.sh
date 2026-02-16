@@ -131,6 +131,9 @@ function install_graphical() {
 			einfo "Enabling global gtk USE flag for GNOME"
 			echo 'USE="${USE} gtk"' >> /etc/portage/make.conf \
 				|| die "Could not append gtk USE flag to /etc/portage/make.conf"
+			einfo "Disabling qt6 for media-libs/libmediaart (conflicts with gtk)"
+			echo "media-libs/libmediaart -qt6" >> /etc/portage/package.use/gnome \
+				|| die "Could not write /etc/portage/package.use/gnome"
 			;;
 		"kde-plasma") de_packages+=("kde-plasma/plasma-meta") ;;
 		"xfce")       de_packages+=("xfce-base/xfce4-meta") ;;
